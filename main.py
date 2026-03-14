@@ -178,42 +178,41 @@ def main():
         except Exception as e:
             print(f"Debug viz failed: {e}")
 
-    # 4. Cut segments
-    if show_progress and tqdm:
-        pbar_cut = tqdm(total=len(segments), unit="seg", desc="Cutting segments")
-        def on_cut(i, n):
-            pbar_cut.n = i
-            pbar_cut.refresh()
-        segment_paths = trimmer.cut_segments(segments, progress_callback=on_cut)
-        pbar_cut.close()
-    else:
-        segment_paths = trimmer.cut_segments(segments)
-    print(f"Cut {len(segment_paths)} segments.")
-
-    # 5. Concat into intermediate file
+    # 4. Create output clips
     if args.no_split:
-        # Single output file mode
+        # Single output file mode: cut and concatenate all segments
+        if show_progress and tqdm:
+            pbar_cut = tqdm(total=len(segments), unit="seg", desc="Cutting segments")
+            def on_cut(i, n):
+                pbar_cut.n = i
+                pbar_cut.refresh()
+            segment_paths = trimmer.cut_segments(segments, progress_callback=on_cut)
+            pbar_cut.close()
+        else:
+            segment_paths = trimmer.cut_segments(segments)
+        print(f"Cut {len(segment_paths)} segments.")
+        
         trimmer.concat_segments(segment_paths, output_path)
         print(f"Output: {output_path}")
     else:
-        # Split into multiple clips mode
-        intermediate_path = trimmer.temp_dir / "concatenated_temp.mp4"
-        trimmer.concat_segments(segment_paths, intermediate_path)
-        
-        # Create output directory for clips
+        # Split into multiple clips mode - each motion segment is split independently
+        # This ensures clips never cross motion segment boundaries
         output_dir = output_path.parent / f"{output_path.stem}_clips"
         ensure_dir(output_dir)
         
-        # 6. Split into clips under max duration
+        # Calculate total clips for progress bar
+        total_clips = 0
+        for seg in segments:
+            seg_duration = seg.end_sec - seg.start_sec
+            total_clips += max(1, math.ceil(seg_duration / args.max_clip_duration))
+        
         if show_progress and tqdm:
-            total_dur = get_video_duration(str(intermediate_path))
-            num_clips = max(1, math.ceil(total_dur / args.max_clip_duration))
-            pbar_split = tqdm(total=num_clips, unit="clip", desc="Splitting into clips")
+            pbar_split = tqdm(total=total_clips, unit="clip", desc="Creating clips")
             def on_split(i, n):
                 pbar_split.n = i
                 pbar_split.refresh()
-            clip_paths = trimmer.split_by_duration(
-                intermediate_path,
+            clip_paths = trimmer.split_segments_by_duration(
+                segments,
                 output_dir,
                 max_duration_sec=args.max_clip_duration,
                 output_basename=output_path.stem,
@@ -221,8 +220,8 @@ def main():
             )
             pbar_split.close()
         else:
-            clip_paths = trimmer.split_by_duration(
-                intermediate_path,
+            clip_paths = trimmer.split_segments_by_duration(
+                segments,
                 output_dir,
                 max_duration_sec=args.max_clip_duration,
                 output_basename=output_path.stem,

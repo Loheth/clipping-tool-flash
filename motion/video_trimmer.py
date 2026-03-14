@@ -151,6 +151,74 @@ class VideoTrimmer:
         
         return clip_paths
 
+    def split_segments_by_duration(
+        self,
+        segments: list[Segment],
+        output_dir: Path,
+        max_duration_sec: float = 60.0,
+        output_basename: str = "output",
+        progress_callback=None,
+    ) -> list[Path]:
+        """Split motion segments into clips, never crossing segment boundaries.
+        
+        Each motion segment is split independently into clips of max_duration_sec.
+        The last clip of each segment can be shorter than max_duration_sec.
+        
+        Args:
+            segments: List of motion segments to process.
+            output_dir: Directory to save clips.
+            max_duration_sec: Maximum duration per clip.
+            output_basename: Base name for output files (without extension).
+            progress_callback: Optional callback(current, total).
+        
+        Returns list of output clip paths.
+        """
+        import math
+        
+        # First, calculate total number of clips we'll create
+        total_clips = 0
+        for seg in segments:
+            seg_duration = seg.end_sec - seg.start_sec
+            total_clips += max(1, math.ceil(seg_duration / max_duration_sec))
+        
+        clip_paths = []
+        clip_index = 1
+        clips_done = 0
+        
+        for seg in segments:
+            seg_duration = seg.end_sec - seg.start_sec
+            num_clips_in_segment = max(1, math.ceil(seg_duration / max_duration_sec))
+            
+            for i in range(num_clips_in_segment):
+                # Calculate start time within the segment
+                clip_start_offset = i * max_duration_sec
+                clip_start_sec = seg.start_sec + clip_start_offset
+                
+                # For the last clip in this segment, use remaining duration
+                if i == num_clips_in_segment - 1:
+                    clip_duration = seg_duration - clip_start_offset
+                else:
+                    clip_duration = max_duration_sec
+                
+                clip_path = output_dir / f"{output_basename}_{clip_index:03d}.mp4"
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(clip_start_sec),
+                    "-i", str(self.input_path),
+                    "-t", str(clip_duration),
+                    "-c", "copy",
+                    str(clip_path),
+                ]
+                subprocess.run(cmd, check=True, capture_output=True)
+                clip_paths.append(clip_path)
+                clip_index += 1
+                clips_done += 1
+                
+                if progress_callback:
+                    progress_callback(clips_done, total_clips)
+        
+        return clip_paths
+
     def cleanup(self) -> None:
         """Remove temp directory and contents."""
         import shutil
