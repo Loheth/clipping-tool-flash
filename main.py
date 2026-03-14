@@ -4,6 +4,7 @@ Motion-based video trimmer: remove segments with no motion from long videos.
 """
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -205,8 +206,6 @@ def main():
         
         # 6. Split into clips under max duration
         if show_progress and tqdm:
-            from motion.utils import get_video_duration
-            import math
             total_dur = get_video_duration(str(intermediate_path))
             num_clips = max(1, math.ceil(total_dur / args.max_clip_duration))
             pbar_split = tqdm(total=num_clips, unit="clip", desc="Splitting into clips")
@@ -231,7 +230,6 @@ def main():
         
         print(f"\nOutput: {len(clip_paths)} clips saved to {output_dir}/")
         for i, clip_path in enumerate(clip_paths, 1):
-            from motion.utils import get_video_duration
             clip_duration = get_video_duration(str(clip_path))
             print(f"  Clip {i}: {clip_path.name} ({clip_duration:.1f}s)")
 
