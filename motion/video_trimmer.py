@@ -88,6 +88,59 @@ class VideoTrimmer:
         subprocess.run(cmd, check=True, capture_output=True)
         return output_path
 
+    def split_by_duration(
+        self,
+        input_path: Path,
+        output_dir: Path,
+        max_duration_sec: float = 60.0,
+        progress_callback=None,
+    ) -> list[Path]:
+        """Split a video into multiple clips, each under max_duration_sec.
+        
+        Returns list of output clip paths.
+        """
+        from .utils import get_video_duration
+        
+        total_duration = get_video_duration(str(input_path))
+        if total_duration <= max_duration_sec:
+            # Video is already under max duration, just copy it
+            clip_path = output_dir / f"{input_path.stem}_001.mp4"
+            cmd = ["ffmpeg", "-y", "-i", str(input_path), "-c", "copy", str(clip_path)]
+            subprocess.run(cmd, check=True, capture_output=True)
+            if progress_callback:
+                progress_callback(1, 1)
+            return [clip_path]
+        
+        # Calculate number of clips needed
+        import math
+        num_clips = math.ceil(total_duration / max_duration_sec)
+        
+        clip_paths = []
+        for i in range(num_clips):
+            start_sec = i * max_duration_sec
+            # For the last clip, use remaining duration
+            if i == num_clips - 1:
+                duration_sec = total_duration - start_sec
+            else:
+                duration_sec = max_duration_sec
+            
+            clip_path = output_dir / f"{input_path.stem}_{i+1:03d}.mp4"
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(start_sec),
+                "-i", str(input_path),
+                "-t", str(duration_sec),
+                "-c", "copy",
+                str(clip_path),
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
+            clip_paths.append(clip_path)
+            
+            if progress_callback:
+                progress_callback(i + 1, num_clips)
+        
+        return clip_paths
+
     def cleanup(self) -> None:
         """Remove temp directory and contents."""
         import shutil

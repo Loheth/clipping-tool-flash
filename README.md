@@ -56,11 +56,13 @@ python main.py input.mp4 \
 | Option | Default | Description |
 |--------|---------|-------------|
 | `input` | (required) | Input video file |
-| `-o`, `--output` | `{input_stem}_trimmed.mp4` | Output trimmed video path |
+| `-o`, `--output` | `{input_stem}_trimmed.mp4` | Output trimmed video path (or base name for clips) |
 | `--motion-threshold` | 5000 | Min number of changed pixels to count as motion |
 | `--min-motion` | 1.0 | Min motion segment duration (seconds) |
 | `--min-silence` | 2.0 | Silence shorter than this is merged with adjacent motion (seconds) |
 | `--fps-sample` | 5 | Frame rate used for motion analysis (3–5 recommended) |
+| `--max-clip-duration` | 60 | Maximum duration per output clip in seconds |
+| `--no-split` | — | Disable splitting; produce a single output file |
 | `--json` | — | Write detected motion segments to a JSON file |
 | `--no-progress` | — | Disable progress bar |
 | `--debug-viz` | — | Save debug visualization (first 500 frames with motion overlay) |
@@ -86,9 +88,22 @@ Stricter motion (higher threshold), longer minimum motion, longer silence gap:
 python main.py input.mp4 --motion-threshold 8000 --min-motion 2.0 --min-silence 3.0 --fps-sample 4
 ```
 
+Split output into 30-second clips (for easier processing):
+
+```bash
+python main.py input.mp4 --max-clip-duration 30
+```
+
+Single output file (no splitting):
+
+```bash
+python main.py input.mp4 --no-split -o trimmed.mp4
+```
+
 ## Output
 
-- **Trimmed video**: By default `{input_name}_trimmed.mp4`, or path given by `-o`. Only segments with motion are kept; cutting uses stream copy (no re-encoding).
+- **Trimmed clips**: By default, output is split into multiple clips (max 60 seconds each) saved to `{input_name}_trimmed_clips/` folder. Each clip is named `{base}_001.mp4`, `{base}_002.mp4`, etc. For example, a 1m30s trimmed video becomes two clips: one 60s clip and one 30s clip.
+- **Single file mode**: Use `--no-split` to get a single concatenated output file instead of multiple clips.
 - **Segments JSON** (if `--json` is set): Array of `{"start": <sec>, "end": <sec>}` for each kept segment.
 
 ## How it works
@@ -99,6 +114,7 @@ python main.py input.mp4 --motion-threshold 8000 --min-motion 2.0 --min-silence 
 4. **Timestamp mapping**: Sample frame indices are converted to seconds using `fps_sample`.
 5. **Cutting**: Each segment is cut with `ffmpeg -ss ... -to ... -c copy`.
 6. **Concatenation**: Segments are concatenated with the FFmpeg concat demuxer (`-c copy`).
+7. **Splitting** (default): The concatenated video is split into multiple clips, each under `max_clip_duration` seconds (default 60s). This makes post-processing easier.
 
 ## Project structure
 

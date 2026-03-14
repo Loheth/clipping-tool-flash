@@ -76,6 +76,18 @@ def parse_args():
         action="store_true",
         help="Keep temporary frames and segments (for debugging)",
     )
+    parser.add_argument(
+        "--max-clip-duration",
+        type=float,
+        default=60.0,
+        dest="max_clip_duration",
+        help="Maximum duration for each output clip in seconds (default: 60). Output will be split into multiple clips if longer.",
+    )
+    parser.add_argument(
+        "--no-split",
+        action="store_true",
+        help="Disable splitting output into multiple clips (produces single output file)",
+    )
     return parser.parse_args()
 
 
@@ -177,9 +189,49 @@ def main():
         segment_paths = trimmer.cut_segments(segments)
     print(f"Cut {len(segment_paths)} segments.")
 
-    # 5. Concat
-    trimmer.concat_segments(segment_paths, output_path)
-    print(f"Output: {output_path}")
+    # 5. Concat into intermediate file
+    if args.no_split:
+        # Single output file mode
+        trimmer.concat_segments(segment_paths, output_path)
+        print(f"Output: {output_path}")
+    else:
+        # Split into multiple clips mode
+        intermediate_path = trimmer.temp_dir / "concatenated_temp.mp4"
+        trimmer.concat_segments(segment_paths, intermediate_path)
+        
+        # Create output directory for clips
+        output_dir = output_path.parent / f"{output_path.stem}_clips"
+        ensure_dir(output_dir)
+        
+        # 6. Split into clips under max duration
+        if show_progress and tqdm:
+            from motion.utils import get_video_duration
+            import math
+            total_dur = get_video_duration(str(intermediate_path))
+            num_clips = max(1, math.ceil(total_dur / args.max_clip_duration))
+            pbar_split = tqdm(total=num_clips, unit="clip", desc="Splitting into clips")
+            def on_split(i, n):
+                pbar_split.n = i
+                pbar_split.refresh()
+            clip_paths = trimmer.split_by_duration(
+                intermediate_path,
+                output_dir,
+                max_duration_sec=args.max_clip_duration,
+                progress_callback=on_split,
+            )
+            pbar_split.close()
+        else:
+            clip_paths = trimmer.split_by_duration(
+                intermediate_path,
+                output_dir,
+                max_duration_sec=args.max_clip_duration,
+            )
+        
+        print(f"\nOutput: {len(clip_paths)} clips saved to {output_dir}/")
+        for i, clip_path in enumerate(clip_paths, 1):
+            from motion.utils import get_video_duration
+            clip_duration = get_video_duration(str(clip_path))
+            print(f"  Clip {i}: {clip_path.name} ({clip_duration:.1f}s)")
 
     if not args.keep_temp:
         trimmer.cleanup()
