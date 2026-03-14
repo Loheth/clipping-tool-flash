@@ -217,6 +217,7 @@ def main():
                 intermediate_path,
                 output_dir,
                 max_duration_sec=args.max_clip_duration,
+                output_basename=output_path.stem,
                 progress_callback=on_split,
             )
             pbar_split.close()
@@ -225,6 +226,7 @@ def main():
                 intermediate_path,
                 output_dir,
                 max_duration_sec=args.max_clip_duration,
+                output_basename=output_path.stem,
             )
         
         print(f"\nOutput: {len(clip_paths)} clips saved to {output_dir}/")

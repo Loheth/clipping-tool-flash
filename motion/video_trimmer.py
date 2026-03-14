@@ -93,18 +93,28 @@ class VideoTrimmer:
         input_path: Path,
         output_dir: Path,
         max_duration_sec: float = 60.0,
+        output_basename: str | None = None,
         progress_callback=None,
     ) -> list[Path]:
         """Split a video into multiple clips, each under max_duration_sec.
+        
+        Args:
+            input_path: Path to the video file to split.
+            output_dir: Directory to save clips.
+            max_duration_sec: Maximum duration per clip.
+            output_basename: Base name for output files (without extension).
+                           If None, uses input_path stem.
+            progress_callback: Optional callback(current, total).
         
         Returns list of output clip paths.
         """
         from .utils import get_video_duration
         
+        basename = output_basename or input_path.stem
         total_duration = get_video_duration(str(input_path))
         if total_duration <= max_duration_sec:
             # Video is already under max duration, just copy it
-            clip_path = output_dir / f"{input_path.stem}_001.mp4"
+            clip_path = output_dir / f"{basename}_001.mp4"
             cmd = ["ffmpeg", "-y", "-i", str(input_path), "-c", "copy", str(clip_path)]
             subprocess.run(cmd, check=True, capture_output=True)
             if progress_callback:
@@ -124,7 +134,7 @@ class VideoTrimmer:
             else:
                 duration_sec = max_duration_sec
             
-            clip_path = output_dir / f"{input_path.stem}_{i+1:03d}.mp4"
+            clip_path = output_dir / f"{basename}_{i+1:03d}.mp4"
             cmd = [
                 "ffmpeg", "-y",
                 "-ss", str(start_sec),
