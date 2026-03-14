@@ -136,6 +136,3 @@ README.md
 - Increase `--motion-threshold` if you get too many false motion regions.
 - Temp files are stored in the system temp dir under `motion_trim/`; ensure enough disk space for extracted frames.
 
-## License
-
-Use and modify as needed for your project.
